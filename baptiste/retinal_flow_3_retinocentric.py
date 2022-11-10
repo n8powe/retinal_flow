@@ -118,7 +118,6 @@ plt.xlabel('Eye Y')
 plt.ylabel('Target Y')
 plt.show()
 
-
 # Now we replot target positions and predicted eye position
 predEyePosX = regX.predict(sm.add_constant(eyeDat[eyeCalibStart:eyeCalibStop, 3]))
 predEyePosY = regY.predict(sm.add_constant(eyeDat[eyeCalibStart:eyeCalibStop, 4]))
@@ -134,3 +133,4 @@ plt.plot(eyeDat[eyeCalibStart:eyeCalibStop, 1]-eyeDat[eyeStart, 1], predEyePosY,
 plt.xlabel('Time (msec)')
 plt.ylabel('Target Y')
 plt.show()
+
