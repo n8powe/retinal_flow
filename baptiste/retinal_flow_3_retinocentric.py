@@ -134,3 +134,20 @@ plt.xlabel('Time (msec)')
 plt.ylabel('Target Y')
 plt.show()
 
+# Now regress the whole eye trace
+resamplingTimes = np.arange(eyeDat[0, 1], eyeDat[-1, 1])
+notBlinks = (eyeDat[:, 3]>0)
+feyeX = interpolate.interp1d(eyeDat[notBlinks, 1], eyeDat[notBlinks, 3], kind='nearest', bounds_error=False)
+eyeXresampled = feyeX(resamplingTimes)
+allEyeX = regX.predict(sm.add_constant(eyeXresampled))
+feyeY = interpolate.interp1d(eyeDat[notBlinks, 1], eyeDat[notBlinks, 4], kind='nearest', bounds_error=False)
+eyeYresampled = feyeY(resamplingTimes)
+allEyeY = regY.predict(sm.add_constant(eyeYresampled))
+
+plt.subplot(211)
+plt.plot(resamplingTimes, allEyeX)
+plt.subplot(212)
+plt.plot(resamplingTimes, allEyeY)
+plt.show()
+
+

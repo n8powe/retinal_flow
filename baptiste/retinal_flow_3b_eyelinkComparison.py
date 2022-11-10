@@ -3,84 +3,79 @@
 
 """
 Monkey Retinal Flow project
-3. retinocentric:
-In this script we use the pupil position extracted in step 1 and calibration targets
-position extracted in step 2 to calibrate eye position and compute images in retino-
-centric coordinates.
+3b. eyelinkComparison:
+For recordings where eyelink data was also recorded, compares accuracy between
+the pitracker and eyelink
 """
 
 import time
 import os
 import cv2
 import numpy as np
+from parse import parse
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Load datasets
-dataPath = '../../retinal_flow_data'
-eyeFile = 'eye_2022-11-08_19-54-09_eyePosition.csv'
-sceneFile = 'scene_2022-11-08_19-54-09_targetPosition.csv'
+dataPath = '../../retinal_flow_data/'
+fileName = 'pitracker_08-11-2022_19-47-59'
 
-eyeDat = pd.read_csv(dataPath+'/'+eyeFile, sep=',', names=['F',	'T', 'I', 'X', 'Y', 'D', 'C'], header=0, skiprows=0).values
-sceneDat = pd.read_csv(dataPath+'/'+sceneFile, sep=',', names=['T', 'I', 'X', 'Y'], header=0, skiprows=0).values
 
-# Find trigger times
-eyeTrigOn, = np.where(eyeDat[1:, 2]-eyeDat[:-1, 2] > 0.5)
-eyeTrigOff, = np.where(eyeDat[1:, 2]-eyeDat[:-1, 2] < -0.5)
-sceneTrigOn, = np.where(sceneDat[1:, 1]-sceneDat[:-1, 1] > 0.5)
-sceneTrigOff, = np.where(sceneDat[1:, 1]-sceneDat[:-1, 1] < -0.5)
-eyeStart = eyeTrigOn[0]
-eyeStop = eyeTrigOff[-1]
-sceneStart = sceneTrigOn[0]
-sceneStop = sceneTrigOff[-1]
+# process eyelink file if not done already
+if not os.path.exists(dataPath+fileName+'.csv'):
+    fid = open(dataPath+fileName+'.asc', 'r')
+    fileTxt = fid.read().splitlines(True)   # split into lines
+    fileTxt = list(filter(None, fileTxt))   # remove emptys
+    fileTxt = np.array(fileTxt)             # concert to np array for simpler indexing
+    fid.close()
 
-plt.plot(eyeDat[eyeStart-10:eyeStop+10, 1]-eyeDat[eyeStart, 1], eyeDat[eyeStart-10:eyeStop+10, 2],
-         sceneDat[sceneStart-10:sceneStop+10, 0]-sceneDat[sceneStart, 0], sceneDat[sceneStart-10:sceneStop+10, 1])
+    sample = 0
+    samplesMat = np.empty((0, 5), float)
+    for line in range(0, fileTxt.shape[0]):
+        print('Parsing asc file %.1f' % (100*line/fileTxt.shape[0]))
+        try:
+            if fileTxt[line].__contains__('...'):
+                samplesMat = np.append(samplesMat,
+                          np.array([parse('{:d}\t{:4.1f}\t{:4.1f}\t{:4.1f}\t{:4.1f}\t...\n', fileTxt[line]).fixed]),
+                          axis=0)
+        except:
+            pass
+
+    df = pd.DataFrame(samplesMat, columns=['Time', 'EyeX', 'EyeY', 'EyeP', 'Input'])
+    df.to_csv(dataPath + fileName + '.csv')
+
+# otherwise just load it
+else:
+    df = pd.read_csv(dataPath+fileName+'.csv')
+
+# plot the eyelink data
+plt.subplot(311)
+plt.plot(df.Time-df.Time[0], df.EyeX)
 plt.xlabel('Time (msec)')
-plt.ylabel('Trigger')
-plt.title("Triggers")
-plt.legend(['Eye', 'Scene'])
-plt.show()
-
-
-# Focus on the calibration task
-eyeCalibStart = eyeTrigOn[1]
-eyeCalibStop = eyeTrigOff[1]
-sceneCalibStart = sceneTrigOn[1]
-sceneCalibStop = sceneTrigOff[1]
-
-# Plot eye at target positions as a function of time
-plt.subplot(221)
-plt.plot(eyeDat[eyeCalibStart:eyeCalibStop, 1]-eyeDat[eyeStart, 1], eyeDat[eyeCalibStart:eyeCalibStop, 3]),
 plt.ylabel('Eye X')
-plt.subplot(222)
-plt.plot(eyeDat[eyeCalibStart:eyeCalibStop, 1]-eyeDat[eyeStart, 1], eyeDat[eyeCalibStart:eyeCalibStop, 4]),
+plt.subplot(312)
+plt.plot(df.Time-df.Time[0], df.EyeY)
+plt.xlabel('Time (msec)')
 plt.ylabel('Eye Y')
-plt.subplot(223)
-plt.plot(sceneDat[sceneCalibStart:sceneCalibStop, 0]-sceneDat[sceneStart, 0], sceneDat[sceneCalibStart:sceneCalibStop, 2])
+plt.subplot(313)
+plt.plot(df.Time-df.Time[0], df.EyeP)
 plt.xlabel('Time (msec)')
-plt.ylabel('Target X')
-plt.subplot(224)
-plt.plot(sceneDat[sceneCalibStart:sceneCalibStop, 0]-sceneDat[sceneStart, 0], sceneDat[sceneCalibStart:sceneCalibStop, 3])
-plt.xlabel('Time (msec)')
-plt.ylabel('Target Y')
+plt.ylabel('Pupil')
 plt.show()
 
-# Plot target as a function of eye
-resamplingTimes = np.arange(0, round(eyeDat[eyeCalibStop, 1]-eyeDat[eyeStart, 1]))
-eyeXresampled = np.interp(resamplingTimes,
-                          eyeDat[eyeCalibStart:eyeCalibStop, 1]-eyeDat[eyeStart, 1],
-                          eyeDat[eyeCalibStart:eyeCalibStop, 3])
-sceneXresampled = np.interp(resamplingTimes,
-                          sceneDat[sceneCalibStart:sceneCalibStop, 1]-sceneDat[sceneStart, 0],
-                          sceneDat[sceneCalibStart:sceneCalibStop, 3])
+# Now load the preprocessed eye and scene data from pitracker
 
-plt.subplot(121)
-plt.plot(eyeXresampled, sceneXresampled, '.')
-plt.xlabel('Eye X')
-plt.ylabel('Target X')
-# plt.subplot(122)
-# plt.plot(eyeDat[eyeCalibStart:eyeCalibStop, 4], sceneDat[sceneCalibStart:sceneCalibStop, 3], '.')
-# plt.xlabel('Eye Y')
-# plt.ylabel('Target Y')
-plt.show()
+
+# plt.subplot(311)
+# plt.plot(df.Time-df.Time[0], df.EyeX)
+# plt.xlabel('Time (msec)')
+# plt.ylabel('Eye X')
+# plt.subplot(312)
+# plt.plot(df.Time-df.Time[0], df.EyeY)
+# plt.xlabel('Time (msec)')
+# plt.ylabel('Eye Y')
+# plt.subplot(313)
+# plt.plot(df.Time-df.Time[0], df.EyeP)
+# plt.xlabel('Time (msec)')
+# plt.ylabel('Pupil')
+# plt.show()
+
